@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style type="text/css">
+        #map_canvas {
+            height: 560px;
+            width: 100%
+        }
+
+        #map_canvas img {
+            max-width: none;
+        }
+
+        #map_canvas div {
+            -webkit-transform: translate3d(0, 0, 0);
+        }
+
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/3.2.1/firebase.js"></script>
+
+    <link rel="stylesheet" href="https://code.jquery.com/mobile/1.1.0/jquery.mobile-1.1.0.min.css" />
+    <script src="https://code.jquery.com/jquery-1.7.1.min.js"></script>
+    <script src="https://code.jquery.com/mobile/1.1.0/jquery.mobile-1.1.0.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?libraries=places&key=AIzaSyBs80KHas24moxfEhemao6F5n56nDEE5eM"></script>
+    <script>
+        Number.prototype.padLeft = function(base, chr) {
+            var len = (String(base || 10).length - String(this).length) + 1;
+            return len > 0 ? new Array(len).join(chr || '0') + this : this;
+        }
+
+        var d = new Date,
+            dformat = [(d.getMonth() + 1).padLeft(), d.getDate().padLeft(), d.getFullYear()].join('/') + ' ' + [d.getHours().padLeft(), d.getMinutes().padLeft(), d.getSeconds().padLeft()].join(':');
+
+        var ArrayData = [];
+        var sortedArrayData = [];
+		var snap1;
+
+        // Initialize Firebase
+        var config = {
+            apiKey: "AIzaSyBr6pMPjGE8wm-_D5qmh26OIcl40QWlUeg",
+            authDomain: "fd18-174800.firebaseapp.com",
+            databaseURL: "https://fd18-174800.firebaseio.com",
+            projectId: "fd18-174800",
+            storageBucket: "fd18-174800.appspot.com",
+            messagingSenderId: "703435324322"
+        };
+
+        firebase.initializeApp(config);
+        // create variable to reference the database
+        var database = firebase.database();
+        var firstlatlong = [];
+        var lastlatlong = [];
+
+        var sortBy = (function() {
+            //cached privated objects
+            var _toString = Object.prototype.toString,
+                //the default parser function
+                _parser = function(x) {
+                    return x;
+                },
+                //gets the item to be sorted
+                _getItem = function(x) {
+                    return this.parser((x !== null && typeof x === "object" && x[this.prop]) || x);
+                };
+
+            // Creates a method for sorting the Array
+            // @array: the Array of elements
+            // @o.prop: property name (if it is an Array of objects)
+            // @o.desc: determines whether the sort is descending
+            // @o.parser: function to parse the items to expected type
+            return function(array, o) {
+                if (!(array instanceof Array) || !array.length)
+                    return [];
+                if (_toString.call(o) !== "[object Object]")
+                    o = {};
+                if (typeof o.parser !== "function")
+                    o.parser = _parser;
+                o.desc = !!o.desc ? -1 : 1;
+                return array.sort(function(a, b) {
+                    a = _getItem.call(o, a);
+                    b = _getItem.call(o, b);
+                    return o.desc * (a < b ? -1 : +(a > b));
+                });
+            };
+
+        }());
+
+
+        function aa(cb) {
+            database.ref().on("value", function(snap) {
+                var snap1 = snap;
+                if(snap.numChildren() > 0) { 
+                
+					snap.forEach(function(child) {
+						//console.log(child.key);
+						ArrayData.push({
+							"id": child.key,
+							"ts": child.val().ts,
+							"lat": child.val().lat,
+							"long": child.val().long
+						});
+
+					});
+			
+					//snap.ref.remove();
+
+					sortedArrayData = sortBy(ArrayData, {
+						prop: "ts",
+						parser: function(item) {
+							return new Date(item);
+						}
+					});
+					var route = [];
+					firstlatlong.push({
+						"lat": sortedArrayData[0].lat,
+						"long": sortedArrayData[0].long
+					});
+					lastlatlong.push({
+						"lat": sortedArrayData[sortedArrayData.length - 1].lat,
+						"long": sortedArrayData[sortedArrayData.length - 1].long
+					});
+
+					for (j = 0; j < sortedArrayData.length; j++) {
+						route.push(new google.maps.LatLng(sortedArrayData[j].lat, sortedArrayData[j].long));
+					}
+
+					cb(route);
+				} else 
+					cb('');
+				
+
+            });
+        }
+
+        function clearData() {
+			console.log('clear');
+			database.ref().on("value", function(snap) {
+				snap.ref.remove();
+				location.reload();
+			});
+		}
+
+		aa(function(returnValue) {
+            if (returnValue.length == 0)
+				document.getElementById('map_canvas').innerHTML = 'No data at the moment';
+            else
+                // initialize(lat, long);
+                initialize1(returnValue);
+        });
+
+        function initialize(lat, long) {
+            var myLatLng = new google.maps.LatLng(lat, long);
+            var map = new google.maps.Map(document.getElementById("map_canvas"), {
+                zoom: 17,
+                center: myLatLng,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            });
+            var marker = new google.maps.Marker({
+                position: myLatLng,
+                map: map,
+                title: 'stepometer'
+            });
+        }
+
+        function initialize1(route) {
+            var map = new google.maps.Map(document.getElementById("map_canvas"), {
+                zoom: 19,
+                center: new google.maps.LatLng(firstlatlong[0].lat, firstlatlong[0].long),
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            });
+
+            var myLatLng_start = new google.maps.LatLng(firstlatlong[0].lat, firstlatlong[0].long);
+            var marker = new google.maps.Marker({
+                position: myLatLng_start,
+                map: map,
+                title: 'start'
+            });
+
+            var myLatLng_end = new google.maps.LatLng(lastlatlong[0].lat, lastlatlong[0].long);
+            var marker = new google.maps.Marker({
+                position: myLatLng_end,
+                map: map,
+                title: 'end'
+            });
+
+            var path = new google.maps.Polyline({
+                path: route,
+                strokeColor: "#FF0000",
+                strokeOpacity: 1.0,
+                strokeWeight: 2
+            });
+            path.setMap(map);
+        }
+    </script>
+</head>
+
+<body>
+    <div data-role="page">
+
+        <div data-role="header" data-position="fixed">
+            <h1>micro:bit Stepometer</h1>
+        </div>
+        <!-- /header -->
+
+        <div data-role="content">
+            <div id="map_canvas"></div>
+        </div>
+        <!-- /content -->
+
+        <div data-role="footer" data-position="fixed">
+
+            <h4><button onclick="clearData()">Clear Data</button></h4>
+			<h5><a href="https://www.facebook.com/microbitsingapore">Singapore micro:bit User Group </a></h5>
+        </div>
+        <!-- /header -->
+    </div>
+    <!-- /page -->
+
+</body>
+
+</html>
